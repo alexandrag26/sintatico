@@ -1,0 +1,402 @@
+PARSER_BEGIN(comp)
+import java.io.*;
+class comp 
+{
+	public static void main( String[] args )throws ParseException, Exception
+	{
+		try
+		{		
+     		comp analizador = new comp( System.in ) ;
+			SimpleNode root=analizador.Programa();
+			System.out.println("\tAnalizador ha terminado exitosamente.");
+			System.out.println("\tImprimiendo arbol de sintaxis.");
+			root.dump("");			
+		}
+		catch(ParseException e)
+		{
+			System.out.println(e.getMessage());
+			System.out.println("\tAnalizador ha encontrado error.");
+		}
+
+	}
+}
+PARSER_END(comp)
+
+TOKEN : 
+{ 
+	  <ASIGNACION : "="> //1
+	| <PLUS : "+" >  //2
+	| <MINUS:"-"> //3
+	| <MULTIPLY:"*">  //4
+	| <DIVIDE:"/"> //5
+	| <INCR: "++" > //6
+	| <DECR: "--" > //7
+	
+}
+TOKEN:
+{
+	  <PUBLIC: "public"> //8
+	| <PRIVATE: "private"> //9
+	| <STATIC: "static"> //10
+	| <VOID: "void"> //11
+	| <MAIN: "public static void Main()"> //12
+	| <PROGRAMA: "Programa" >  //13
+	| <IF: "if" > //14
+	| <ELSE:"else" > //15
+	| <ELSEIF:"else if" > //16
+	| <FOR:"for" > //17
+	| <SWITCH:"switch" > //18
+	| <CASE:"case" > //19
+	| <BREAK:"break" > //20
+	| <DEFAUL:"default" > //21
+	| <DO:"do" > //22
+	| <WHILE:"while" > //23
+	| <WRITE:"write" > //24
+	| <READ:"read" > //25
+	| <IMPORT:"import" > //26
+}
+TOKEN:
+{
+      <LPAREN: "(" > //27
+	| <RPAREN: ")" > //28
+	| <LBRACE: "{" > //29
+	| <RBRACE: "}" > //30
+	| <LBRACKET: "[" > //31
+	| <RBRACKET: "]" > //32
+	| <SEMICOLON: ";" > //33
+	| <COMMA: "," > //34
+	| <DOT: "." > //35
+	| <DOUBLECOMMA: "\""> //36
+}
+TOKEN:
+{
+	  <EQ: "==" > //37
+	| <LE: "<=" > //38
+	| <MN: "<" > //39
+	| <GE: ">=" > //40
+	| <GR: ">" > //41
+	| <NE: "!=" > //42
+	| <OR: "||" > //43
+	| <AND: "&&"> //44
+}
+
+TOKEN:
+{
+	  <INT:"int"> //45
+	| <DEC: "float"> //46
+	| <CHR: "char"> //47
+	| <STR: "String"> //48
+	| <NUMBER : (["0"-"9"])+>  //49
+	| <IDENTIFIER : ["a"-"z","A"-"Z"](["a"-"z","A"-"Z","0"-"9","_"])*>  //50
+	| <DECIMAL : (["0"-"9"])+["."](["0"-"9"])+ > //51
+	| <CADENA : <DOUBLECOMMA>["a"-"z","A"-"Z","0"-"9"," "](["a"-"z","A"-"Z","0"-"9"," ",":",";","."])*<DOUBLECOMMA>> //52
+	| <CARAC : "'"["a"-"z","A"-"Z","0"-"9"]"'" >//53
+	| <DOUBLEPOINT : ":"> //54
+}
+
+SKIP : 
+{ 
+	" "|"\n" | "\r" | "\r\n" | "\t"
+}
+
+SimpleNode Programa()#Inicio:
+{}
+{
+	(Import())*<PROGRAMA><IDENTIFIER><LBRACE>Bloque()<RBRACE><EOF> {return jjtThis;}
+}
+
+void Import()#Importacion:
+{Token t;}
+{
+	 t=<IMPORT><IDENTIFIER><SEMICOLON>{jjtThis.value = t.image;}
+}
+
+void Bloque():
+{}
+{
+	LOOKAHEAD(2)VariablesGlobales() | Principal()
+}
+
+void VariablesGlobales()#declaracion_variables_globales:
+{}
+{
+	(<PRIVATE>|<PUBLIC>)(<INT>|<DEC>|<STR>|<CHR>) <IDENTIFIER>(<COMMA><IDENTIFIER>)* <SEMICOLON> Bloque()
+}
+
+void Principal()#Main:
+{
+	TokenAsignaciones.SetTables();	
+}
+{
+	<MAIN>
+	<LBRACE>Sentencias()<RBRACE> 	
+}
+
+
+void VariablesLocales():
+{
+	int td;
+	Token var;	
+}
+{
+(
+	(TiposDatos())
+	{
+		td = token.kind;
+	}
+	var = <IDENTIFIER> 
+	{		
+		TokenAsignaciones.InsertarSimbolo(var, td);
+	} 
+	[VariablesAsignacion(var)]
+	(
+		<COMMA>
+		var = <IDENTIFIER> 
+		{		
+			TokenAsignaciones.InsertarSimbolo(var, td);
+		} 
+		[VariablesAsignacion(var)]
+	)*	
+	<SEMICOLON> 
+)
+	(VS())
+}
+
+void VariablesAsignacion(Token v1):
+{
+	Token v2;
+	Token v3;
+	String res;	
+	boolean imp = false;
+}
+{
+	<ASIGNACION>
+	(TiposAsignaciones())
+	  {  
+		v2 = token;
+		res = TokenAsignaciones.checkAsing(v1, v2);
+		
+		if(res != " ")
+		{
+			System.out.println(res);
+			imp = true;
+		}
+	  }
+	  (OpAritmetico()
+	  TiposAsignaciones()
+	  {  
+		v3 = token;
+		res = TokenAsignaciones.checkAsing(v1, v3);
+		
+		if(res != " " && !imp)
+		{
+			System.out.println(res);
+		}
+	  })*
+}
+
+void VS()#void:
+{}
+{
+	LOOKAHEAD(3)VariablesLocales() | Sentencias()
+}
+
+void Sentencias():
+{}
+{
+	(	
+	  VariablesLocales()	
+    | SentenciaIf() 	
+	| SentenciaFor()
+	| SentenciaDo()	
+	| LOOKAHEAD(2)SentenciaAsignacion()<SEMICOLON>{TokenAsignaciones.segunda = 0;}
+	| SentenciaWrite()
+	| SentenciaRead()
+	| SentenciaSwitch()
+	)*
+}
+
+//Sentencia IF
+void SentenciaIf() #IF :
+{}
+{
+	<IF><LPAREN> A() <RPAREN> <LBRACE> Sentencias() <RBRACE> (Sino())* 
+}
+
+void Sino()#ELSEIF:
+{}
+{
+	<ELSE><LBRACE> Sentencias() <RBRACE> | <ELSEIF> <LPAREN> A() <RPAREN> <LBRACE> Sentencias() <RBRACE>
+}
+
+void A()#comparaciondecomparaciones:
+{}
+{
+	  Comparaciones() ([(<AND>|<OR>)] Comparaciones())*
+}
+//Fin sentencia if
+
+void Comparaciones():
+{}
+{
+	Valor()Operadores()Valor()
+}
+void Valor():
+{}
+{
+	LOOKAHEAD(2) (<IDENTIFIER> | <NUMBER>) | Expresion()
+}
+void Expresion():
+{}
+{
+    LOOKAHEAD(2)(<NUMBER> | <IDENTIFIER>)
+	|(<IDENTIFIER>|<NUMBER>) OpAritmetico() (<IDENTIFIER>|<NUMBER>) 
+}
+
+void Operadores()#oplogi:
+{}
+{
+	    <EQ> 
+	  | <LE> 
+	  | <GE> 
+	  | <NE> 
+	  | <GR> 
+	  | <MN> 
+}
+
+int OpAritmetico()#oparit:
+{}
+{
+	  (<PLUS> {return 1;})
+	| (<MINUS> {return 1;})
+	| (<MULTIPLY> {return 1;})
+	| (<DIVIDE> {return 1;})
+	| ({return 0;})
+	
+	{return 0;}
+}
+
+void TiposDatos()#tipodato:
+{}
+{
+	 <INT>
+	|<DEC>
+	|<STR>
+	|<CHR>
+}
+
+
+//Sentencia FOR
+void SentenciaFor()#FOR:
+{}
+{
+	<FOR> <LPAREN>(DeclaracionUnaVariable()|SentenciaAsignacion())<SEMICOLON> Comparaciones() <SEMICOLON> SentenciaAsignacion() <RPAREN> <LBRACE> Sentencias() <RBRACE> 
+}
+
+void DeclaracionUnaVariable()#declararvariable:
+{
+	int td;
+	Token var;	
+}
+{	
+	(TiposDatos())
+	{
+		td = token.kind;
+	}
+	var = <IDENTIFIER> 
+	{		
+		TokenAsignaciones.InsertarSimbolo(var, td);
+	} 
+	[VariablesAsignacion(var)]		
+}
+
+//Sentencia DO
+void SentenciaDo()#DO:
+{}
+{
+	<DO> <LBRACE>Sentencias() <RBRACE> <WHILE> <LPAREN> Comparaciones() <RPAREN> | SentenciaWhile()
+		
+}
+void SentenciaWhile()#WHILE:
+{}
+{
+	<WHILE> <LPAREN> Comparaciones() <RPAREN> <LBRACE> Sentencias() <RBRACE>
+}
+
+//Sentencia ASIGNACION
+void SentenciaAsignacion():
+{
+	Token v1;
+	Token v2;
+	Token v3;
+	int aux;
+	String res;
+	boolean imp = false;
+}
+{
+  v1 = <IDENTIFIER> 
+  (<ASIGNACION>
+  (TiposAsignaciones())
+  {  
+    v2 = token;
+	res = TokenAsignaciones.checkAsing(v1, v2);
+	
+	if(res != " ")
+	{
+		System.out.println(res);
+		imp = true;
+	}
+  }
+  (LOOKAHEAD(2)OpAritmetico()
+  TiposAsignaciones()
+  {  
+    v3 = token;
+	res = TokenAsignaciones.checkAsing(v1, v3);
+	
+	if(res != " " && !imp)
+	{
+		System.out.println(res);
+	}
+  })*  
+  |
+  (<INCR>|<DECR>)
+  {  
+	res = TokenAsignaciones.checkVariable(v1);
+	
+	if(res != " ")	
+		System.out.println(res);	
+  })
+  
+  //SentenciaAsignacion ya trae <SEMICOLON> en el metodo Sentencias()
+}
+
+void TiposAsignaciones():
+{}
+{
+	  <IDENTIFIER> 
+	| <NUMBER> 
+	| <DECIMAL> 
+	| <CADENA> 
+	| <CARAC>
+}
+
+//Sentencia WRITE
+void SentenciaWrite()#WRITE:
+{}
+{
+	<WRITE> <LPAREN> (Expresion()(<PLUS><CADENA>)*|<CADENA>(<PLUS>Expresion())*)* <RPAREN> <SEMICOLON> 
+}
+
+//Sentencia READ
+void SentenciaRead()#READ:
+{}
+{
+	<READ><LPAREN><RPAREN><SEMICOLON> 
+}
+
+void SentenciaSwitch()#SWITCH:
+{}
+{
+	<SWITCH><LPAREN><IDENTIFIER><RPAREN><LBRACE>(<CASE>(<IDENTIFIER>|<CADENA>|<CARAC>|<NUMBER>|<DECIMAL>)<DOUBLEPOINT>(SentenciaAsignacion()<SEMICOLON>)+ <BREAK><SEMICOLON>)+[<DEFAUL><DOUBLEPOINT>(SentenciaAsignacion()<SEMICOLON>)<BREAK><SEMICOLON>]<RBRACE>
+}
+
